@@ -1,6 +1,6 @@
 [package]
 name = "hey"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "Ask an LLM about your terminal: piped output, the last command, its exit status"
 license = "MIT"
