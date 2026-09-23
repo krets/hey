@@ -428,7 +428,7 @@ fn missing_key_exits_3_with_guidance() {
     sb.write_config("[core]\n provider = anthropic\n");
     let out = sb.cmd().arg("x").output().unwrap();
     assert_eq!(code(&out), 3);
-    assert!(stderr(&out).contains("HEY_ANTHROPIC_KEY"), "{}", stderr(&out));
+    assert!(stderr(&out).contains("hey config init"), "{}", stderr(&out));
 }
 
 #[test]
@@ -565,6 +565,82 @@ fn git_context_is_off_by_default_and_opt_in() {
     sb2.write_config(&anthropic_config("http://127.0.0.1:9"));
     let out = sb2.cmd().args(["--dry-run", "x"]).output().unwrap();
     assert!(!stdout(&out).contains("git:"));
+}
+
+// ------------------------------------------------- provider selection
+
+#[test]
+fn nothing_set_up_points_at_config_init_and_names_no_provider() {
+    let sb = Sandbox::new();
+    let out = sb.cmd().args(["why", "did", "this", "fail"]).output().unwrap();
+    assert_eq!(code(&out), 3);
+    let err = stderr(&out);
+    assert!(err.contains("hey config init"), "{err}");
+    assert!(!err.to_lowercase().contains("anthropic"), "must not favour a provider: {err}");
+    assert_eq!(stdout(&out), "");
+}
+
+#[test]
+fn a_single_key_in_the_environment_picks_that_provider() {
+    let sb = Sandbox::new();
+    let out = sb.cmd().env("HEY_OPENAI_KEY", "k-abcdefgh").args(["--dry-run", "hi"]).output().unwrap();
+    assert_eq!(code(&out), 0, "{}", stderr(&out));
+    assert!(stdout(&out).contains("POST https://api.openai.com/v1/chat/completions"), "{}", stdout(&out));
+}
+
+#[test]
+fn several_keys_in_the_environment_are_ambiguous() {
+    let sb = Sandbox::new();
+    let out = sb
+        .cmd()
+        .env("HEY_OPENAI_KEY", "k-abcdefgh")
+        .env("HEY_GEMINI_KEY", "k-abcdefgh")
+        .args(["--dry-run", "hi"])
+        .output()
+        .unwrap();
+    assert_eq!(code(&out), 3);
+    let err = stderr(&out);
+    assert!(err.contains("openai") && err.contains("gemini") && err.contains("core.provider"), "{err}");
+}
+
+#[test]
+fn configured_providers_without_a_default_are_listed_in_the_hint() {
+    let sb = Sandbox::new();
+    sb.write_config("[provider \"mine\"]\n type = openai\n model = m\n url = http://x/v1\n");
+    let out = sb.cmd().arg("why").output().unwrap();
+    assert_eq!(code(&out), 3);
+    let err = stderr(&out);
+    assert!(err.contains("hey config init") && err.contains("configured: mine"), "{err}");
+}
+
+#[test]
+fn hey_provider_env_and_flag_beat_the_default() {
+    let sb = Sandbox::new();
+    let (url, rx) = mock(vec![anthropic_ok("ok"), anthropic_ok("ok")]);
+    sb.write_config(&format!(
+        "[core]\n provider = other\n[provider \"other\"]\n type = openai\n url = http://127.0.0.1:9\n model = m\n[provider \"a\"]\n type = anthropic\n url = {url}\n model = am\n key = k-aaaa-1234\n"
+    ));
+    sb.cmd().env("HEY_PROVIDER", "a").arg("x").output().unwrap();
+    assert_eq!(rx.recv().unwrap().json()["model"], "am");
+    sb.cmd().args(["-p", "a", "x"]).output().unwrap();
+    assert_eq!(rx.recv().unwrap().json()["model"], "am");
+}
+
+#[test]
+fn providers_command_with_nothing_set_up_hints_instead_of_starring_one() {
+    let sb = Sandbox::new();
+    let out = sb.cmd().args(["config", "providers"]).output().unwrap();
+    assert_eq!(code(&out), 0);
+    assert_eq!(stdout(&out), "");
+    assert!(stderr(&out).contains("hey config init"), "{}", stderr(&out));
+}
+
+#[test]
+fn doctor_with_nothing_set_up_fails_the_provider_check_with_guidance() {
+    let sb = Sandbox::new();
+    let out = sb.cmd().arg("doctor").output().unwrap();
+    assert_eq!(code(&out), 3);
+    assert!(stdout(&out).contains("FAIL  provider: no provider is set up. Run: hey config init"), "{}", stdout(&out));
 }
 
 // ------------------------------------------------------------ permissions

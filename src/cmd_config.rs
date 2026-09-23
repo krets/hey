@@ -236,16 +236,13 @@ fn edit(f: Flags) -> Result<()> {
 
 fn providers() -> Result<()> {
     let cfg = Config::load()?;
-    let active = std::env::var("HEY_PROVIDER")
-        .ok()
-        .filter(|v| !v.is_empty())
-        .or_else(|| cfg.get("core.provider"))
-        .unwrap_or_else(|| "anthropic".into());
+    let default = crate::provider::default_name(&cfg);
+    let active = default.as_ref().ok().cloned().unwrap_or_default();
     let escalate = cfg.get("core.escalate");
 
     let mut names = cfg.provider_names();
     // Built-ins that are in use but have no section of their own.
-    for n in [Some(active.clone()), escalate.clone()].into_iter().flatten() {
+    for n in [default.as_ref().ok().cloned(), escalate.clone()].into_iter().flatten() {
         if Kind::parse(&n).is_some() && !names.contains(&n) {
             names.push(n);
         }
@@ -280,8 +277,10 @@ fn providers() -> Result<()> {
     for r in &rows {
         outln!("{} {:<w1$}  {:<w2$}  {:<w3$}  {}", r[0], r[1], r[2], r[3], r[4]);
     }
-    if !names.contains(&active) {
-        eprintln!("hey: active provider '{active}' is not configured");
+    match default {
+        Err(e) => eprintln!("hey: {e}"),
+        Ok(a) if !names.contains(&a) => eprintln!("hey: active provider '{a}' is not configured"),
+        Ok(_) => {}
     }
     Ok(())
 }
@@ -296,13 +295,14 @@ struct Preset {
     needs_key: bool,
 }
 
+/// Alphabetical on purpose: the list must not suggest a favourite.
 const PRESETS: &[Preset] = &[
     Preset { name: "anthropic", kind: Kind::Anthropic, url: None, model: Some("claude-haiku-4-5"), needs_key: true },
-    Preset { name: "openai", kind: Kind::OpenAi, url: None, model: Some("gpt-4.1-nano"), needs_key: true },
     Preset { name: "gemini", kind: Kind::Gemini, url: None, model: Some("gemini-2.5-flash"), needs_key: true },
     Preset { name: "grok", kind: Kind::OpenAi, url: Some("https://api.x.ai/v1"), model: None, needs_key: true },
-    Preset { name: "ollama", kind: Kind::OpenAi, url: Some("http://localhost:11434/v1"), model: Some("llama3.1"), needs_key: false },
     Preset { name: "lmstudio", kind: Kind::OpenAi, url: Some("http://localhost:1234/v1"), model: None, needs_key: false },
+    Preset { name: "ollama", kind: Kind::OpenAi, url: Some("http://localhost:11434/v1"), model: Some("llama3.1"), needs_key: false },
+    Preset { name: "openai", kind: Kind::OpenAi, url: None, model: Some("gpt-4.1-nano"), needs_key: true },
     Preset { name: "custom", kind: Kind::OpenAi, url: None, model: None, needs_key: true },
 ];
 
@@ -352,7 +352,7 @@ fn init(shell_flag: Option<&str>) -> Result<()> {
     for (i, p) in PRESETS.iter().enumerate() {
         outln!("  {}) {}", i + 1, p.name);
     }
-    let choice = ask_required("Provider (number or name)", Some("1"))?;
+    let choice = ask_required("Provider (number or name)", None)?;
     let preset = choice
         .parse::<usize>()
         .ok()
@@ -428,4 +428,19 @@ fn init(shell_flag: Option<&str>) -> Result<()> {
     }
     outln!("\nTry: hey how do I list files by size");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PRESETS;
+
+    #[test]
+    fn provider_choices_are_alphabetical_with_custom_last() {
+        let names: Vec<&str> = PRESETS.iter().map(|p| p.name).collect();
+        let (custom, rest) = names.split_last().unwrap();
+        assert_eq!(*custom, "custom");
+        let mut sorted = rest.to_vec();
+        sorted.sort_unstable();
+        assert_eq!(rest, sorted.as_slice());
+    }
 }

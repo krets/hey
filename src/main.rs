@@ -377,10 +377,10 @@ fn ask(opts: Opts, words: Vec<String>, literal: bool) -> Result<()> {
             }
         }
     } else {
-        env_nonempty("HEY_PROVIDER")
-            .or_else(|| alias_field("provider"))
-            .or_else(|| cfg.get("core.provider"))
-            .unwrap_or_else(|| "anthropic".to_string())
+        match env_nonempty("HEY_PROVIDER").or_else(|| alias_field("provider")) {
+            Some(p) => p,
+            None => provider::default_name(&cfg)?,
+        }
     };
     let model_override = opts
         .model
@@ -414,9 +414,8 @@ fn ask(opts: Opts, words: Vec<String>, literal: bool) -> Result<()> {
     let key = cfg.resolve_key(&prov.name)?;
     if key.is_none() && prov.url == prov.kind.default_url() {
         return config_err(format!(
-            "no API key for provider '{}'. Set {} or run: hey config set provider.{}.key",
+            "no API key for provider '{}'. Run: hey config init  (or: hey config set provider.{}.key)",
             prov.name,
-            config::env_key_name(&prov.name),
             prov.name
         ));
     }

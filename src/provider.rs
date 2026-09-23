@@ -51,6 +51,43 @@ impl Kind {
     }
 }
 
+/// Which provider to use when the command line does not say.
+///
+/// There is deliberately no built-in favourite. Order: `HEY_PROVIDER`,
+/// `core.provider`, then the one provider that has a key in the environment.
+/// Otherwise the user is pointed at `hey config init`.
+pub fn default_name(cfg: &Config) -> Result<String> {
+    if let Some(p) = std::env::var("HEY_PROVIDER").ok().filter(|v| !v.trim().is_empty()) {
+        return Ok(p);
+    }
+    if let Some(p) = cfg.get("core.provider") {
+        return Ok(p);
+    }
+    let configured = cfg.provider_names();
+    let mut with_env_key: Vec<String> = Vec::new();
+    for n in ["anthropic", "openai", "gemini"]
+        .into_iter()
+        .map(String::from)
+        .chain(configured.iter().cloned())
+    {
+        if !with_env_key.contains(&n) && crate::config::env_key(&n).is_some() {
+            with_env_key.push(n);
+        }
+    }
+    match with_env_key.len() {
+        1 => Ok(with_env_key.remove(0)),
+        0 if configured.is_empty() => config_err("no provider is set up. Run: hey config init"),
+        0 => config_err(format!(
+            "no default provider. Run: hey config init, or: hey config set core.provider <name> (configured: {})",
+            configured.join(", ")
+        )),
+        _ => config_err(format!(
+            "more than one provider has a key in the environment ({}). Choose one: hey config set core.provider <name>",
+            with_env_key.join(", ")
+        )),
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Provider {
     pub name: String,

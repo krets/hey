@@ -17,7 +17,6 @@ pub const BUILTIN_SUBCOMMANDS: &[&str] = &["config", "shell", "doctor", "version
 /// Built-in defaults, consulted last.
 pub fn default_for(key: &str) -> Option<&'static str> {
     Some(match key {
-        "core.provider" => "anthropic",
         "core.max_tokens" => "800",
         "core.timeout" => "30",
         "core.stream" => "false",
@@ -458,7 +457,7 @@ pub fn env_key_name(provider: &str) -> String {
     format!("HEY_{up}_KEY")
 }
 
-fn env_key(provider: &str) -> Option<String> {
+pub fn env_key(provider: &str) -> Option<String> {
     std::env::var(env_key_name(provider))
         .ok()
         .map(|v| v.trim().to_string())

@@ -1,7 +1,7 @@
 //! `hey doctor` (spec section 10): one line per check.
 
 use crate::config::{
-    self, Config, LocalGuard, Scope, ScopeKind, env_key_name, foreign_acl_principals,
+    self, Config, LocalGuard, Scope, ScopeKind, foreign_acl_principals,
     insecure_message, insecure_mode,
 };
 use crate::error::{Error, Result, usage_err};
@@ -129,13 +129,10 @@ pub fn run(args: Vec<String>) -> Result<()> {
         rep.info("provider checks skipped until the config parses");
     }
     if let Some(cfg) = &cfg {
-        let name = std::env::var("HEY_PROVIDER")
-            .ok()
-            .filter(|v| !v.is_empty())
-            .or_else(|| cfg.get("core.provider"))
-            .unwrap_or_else(|| "anthropic".to_string());
         let model_env = std::env::var("HEY_MODEL").ok().filter(|v| !v.is_empty());
-        match provider::resolve(cfg, &name, model_env.as_deref()) {
+        let resolved = provider::default_name(cfg)
+            .and_then(|name| provider::resolve(cfg, &name, model_env.as_deref()));
+        match resolved {
             Ok(p) => {
                 rep.ok(format!(
                     "provider: {} (type {}, model {}, {})",
@@ -208,9 +205,8 @@ fn check_key(rep: &mut Report, cfg: &Config, p: &provider::Provider) {
             rep.fail(
                 3,
                 format!(
-                    "key: none for '{}'. Set {} or run: hey config set provider.{}.key",
+                    "key: none for '{}'. Run: hey config init  (or: hey config set provider.{}.key)",
                     p.name,
-                    env_key_name(&p.name),
                     p.name
                 ),
             );
