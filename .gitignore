@@ -1,0 +1,5 @@
+/target
+/dist
+
+# Real API keys for scripts/live-test.sh. Never commit.
+/.api_keys_for_testing
