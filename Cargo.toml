@@ -1,0 +1,22 @@
+[package]
+name = "hey"
+version = "0.1.0"
+edition = "2024"
+description = "Ask an LLM about your terminal: piped output, the last command, its exit status"
+license = "MIT"
+readme = "README.md"
+
+[dependencies]
+rpassword = "7.5"
+serde_json = "1"
+ureq = "3"
+
+[target."cfg(unix)".dependencies]
+libc = "0.2"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
