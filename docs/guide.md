@@ -55,6 +55,36 @@ hey config set provider.ollama.model llama3.1
 
 `core.escalate` names the provider `hey -x` uses.
 
+### Ollama
+
+Ollama serves an OpenAI-compatible API at `http://localhost:11434/v1` and
+needs no key. Pull a model, then point `hey` at it:
+
+```sh
+ollama pull qwen2.5-coder:3b
+hey config set provider.ollama.type openai
+hey config set provider.ollama.url http://localhost:11434/v1
+hey config set provider.ollama.model qwen2.5-coder:3b
+hey config set core.provider ollama
+```
+
+`ollama list` shows the model names you can use. `hey -v ...` prints the URL
+and model of each request, which helps when something doesn't connect.
+
+**WSL with Ollama on Windows.** Under WSL's default NAT networking,
+`localhost` inside WSL is not the Windows host. Either turn on mirrored
+networking (add `networkingMode=mirrored` under `[wsl2]` in
+`%UserProfile%\.wslconfig`, then `wsl --shutdown`) and keep the `localhost`
+URL, or use the host's address:
+
+```sh
+ip route show default | awk '{print $3}'    # e.g. 172.30.0.1
+hey config set provider.ollama.url http://172.30.0.1:11434/v1
+```
+
+That address can change when Windows restarts, and Ollama must listen beyond
+loopback (set `OLLAMA_HOST=0.0.0.0` in Windows and restart Ollama).
+
 ## Aliases
 
 Named prompts, stored in your config:
